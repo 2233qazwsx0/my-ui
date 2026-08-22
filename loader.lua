@@ -1,11 +1,11 @@
 --[[
     WindUI 自用 loader（防删库单文件版）
-    用法：loadstring(game:HttpGet("https://raw.githubusercontent.com/你的Github用户名/你的仓库名/main/loader.lua"))()
+    用法：loadstring(game:HttpGet("https://raw.githubusercontent.com/2233qazwsx0/my-ui/main/loader.lua"))()
     之后全局 getgenv().WindUI 就是可用的 UI 库。
 ]]
 
--- 单文件直链（无镜像，避免减速）
-local URL = "https://raw.githubusercontent.com/你的Github用户名/你的仓库名/main/WindUI.lua"
+-- 单文件直链（你自己的 GitHub 仓库）
+local URL = "https://raw.githubusercontent.com/2233qazwsx0/my-ui/main/WindUI.lua"
 
 local WindUI = loadstring(game:HttpGet(URL, true))()
 

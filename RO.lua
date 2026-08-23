@@ -3152,3 +3152,343 @@ do
 
 	WepTab:Paragraph({ Title = "说明", Desc = "武器源码托管于 GitHub raw，点击后远程加载生成。加载失败请检查网络/注入器是否放行 game:HttpGet。" })
 end
+
+--==================== 『战争大亨』Tab ====================
+do
+	local WarTab = Window:Tab({ Title = "战争大亨", Icon = "geist:zap" })
+
+	-- 通用辅助：传送（先跳一下再移，避免卡地）
+	local function warTP(x, y, z)
+		local chr = game.Players.LocalPlayer.Character
+		if not chr then return end
+		local hrp = chr:FindFirstChild("HumanoidRootPart")
+		local hum = chr:FindFirstChildWhichIsA("Humanoid")
+		if not hrp then return end
+		if hum then pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end) end
+		task.wait(0.2)
+		hrp.CFrame = CFrame.new(x, y, z)
+	end
+
+	-- 获取本地玩家
+	local function warLP()
+		return game.Players.LocalPlayer
+	end
+
+	--========== 战斗 ==========
+	WarTab:Section({ Title = "战斗" })
+
+	-- 范围（扩大所有敌人的 HumanoidRootPart 命中框）
+	local _warRangeConn = nil
+	WarTab:Toggle({
+		Title = "扩大命中范围",
+		Value = false,
+		Callback = function(v)
+			if v then
+				local size = 150
+				_warRangeConn = game:GetService("RunService").RenderStepped:Connect(function()
+					for _, plr in ipairs(game.Players:GetPlayers()) do
+						if plr ~= warLP() and plr.Character then
+							local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+							if hrp then
+								pcall(function()
+									hrp.Size = Vector3.new(size, size, size)
+									hrp.Transparency = 0.7
+									hrp.BrickColor = BrickColor.new("Really blue")
+									hrp.Material = Enum.Material.Neon
+									hrp.CanCollide = false
+								end)
+							end
+						end
+					end
+				end)
+			else
+				if _warRangeConn then _warRangeConn:Disconnect(); _warRangeConn = nil end
+			end
+		end,
+	})
+
+	-- 秒杀 / 无限子弹（改 ACS_Modulo 枪械设置）
+	local function warModifyGuns(full)
+		local bp = warLP().Backpack
+		if not bp then return end
+		for _, tool in ipairs(bp:GetChildren()) do
+			local variaveis = tool:FindFirstChild("ACS_Modulo") and tool.ACS_Modulo:FindFirstChild("Variaveis")
+			local settings = variaveis and variaveis:FindFirstChild("Settings")
+			if settings then
+				local ok, s = pcall(function() return require(settings) end)
+				if ok and s then
+					if s.Bullets then s.Bullets = full and 1 or nil end
+					if s.Ammo then s.Ammo = 5000000 end
+					if s.Mode then s.Mode = "Auto" end
+					if s.FireModes and s.FireModes.Auto ~= nil then s.FireModes.Auto = true end
+					if s.FireRate then s.FireRate = 1000000000 end
+					if s.DamageMultiplier then s.DamageMultiplier = 1000000000 end
+					if s.Distance then s.Distance = 1000000000 end
+					if s.VRecoil then s.VRecoil = { 0, 0 } end
+					if s.HRecoil then s.HRecoil = { 0, 0 } end
+					if s.RecoilPunch then s.RecoilPunch = 0 end
+					if s.VPunchBase then s.VPunchBase = 0 end
+					if s.HPunchBase then s.HPunchBase = 0 end
+					if s.DPunchBase then s.DPunchBase = 0 end
+					if s.MinRecoilPower then s.MinRecoilPower = 0 end
+					if s.MaxRecoilPower then s.MaxRecoilPower = 0 end
+					if s.BSpeed then s.BSpeed = 100000000 end
+					if s.BDrop then s.BDrop = 0 end
+					if s.MinSpread then s.MinSpread = 0 end
+					if s.MaxSpread then s.MaxSpread = 0 end
+				end
+			end
+		end
+	end
+	WarTab:Button({
+		Title = "无限子弹",
+		Callback = function()
+			warModifyGuns(false)
+			Notify("战争大亨", "无限子弹已应用", "rbxassetid://132872684918876", 3)
+		end,
+	})
+	WarTab:Button({
+		Title = "秒杀",
+		Callback = function()
+			warModifyGuns(true)
+			Notify("战争大亨", "秒杀已应用", "rbxassetid://132872684918876", 3)
+		end,
+	})
+
+	-- 全图杀人（RPG / RocketSystem）
+	WarTab:Button({
+		Title = "全图杀人(需火焰喷射器/RPG)",
+		Callback = function()
+			local lp = warLP()
+			local rocketData = {
+				[1] = Vector3.new(),
+				[2] = Vector3.new(0, 1, 0),
+				[3] = lp.Character and lp.Character:FindFirstChild("RPG"),
+				[4] = lp.Character and lp.Character:FindFirstChild("RPG"),
+				[7] = "zxcvbnm4189Rocket2",
+			}
+			local origin = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") and lp.Character.HumanoidRootPart.Position + Vector3.new(0, 1, 0) * 1000 or Vector3.new()
+			local rs = game:GetService("ReplicatedStorage")
+			local rocketSystem = rs:FindFirstChild("RocketSystem")
+			if not rocketSystem then Notify("战争大亨", "未找到 RocketSystem", nil, 3) return end
+			local rocketHit = rocketSystem:FindFirstChild("RocketHit")
+			if not rocketHit then Notify("战争大亨", "未找到 RocketHit", nil, 3) return end
+			for _, plr in ipairs(game.Players:GetPlayers()) do
+				if plr ~= lp then
+					if plr.Character and plr.Character:FindFirstChild("Torso") then
+						local d = table.clone(rocketData)
+						d[1] = origin
+						d[5] = plr.Character.Torso
+						pcall(function() rocketHit:FireServer(unpack(d)) end)
+					end
+				end
+			end
+			Notify("战争大亨", "全图杀人已触发", nil, 3)
+		end,
+	})
+
+	--========== 功能 ==========
+	WarTab:Section({ Title = "功能" })
+
+	WarTab:Button({
+		Title = "删除所有门",
+		Callback = function()
+			local tycoons = workspace:FindFirstChild("Tycoon") and workspace.Tycoon:FindFirstChild("Tycoons")
+			if not tycoons then Notify("战争大亨", "未找到 Tycoon 结构", nil, 3) return end
+			local cnt = 0
+			for _, tycoon in pairs(tycoons:GetChildren()) do
+				local po = tycoon:FindFirstChild("PurchasedObjects")
+				if po then
+					for _, obj in pairs(po:GetChildren()) do
+						if obj.Name:find("Door") or obj.Name:find("Gate") then
+							pcall(function() obj:Destroy() end)
+							cnt = cnt + 1
+						end
+					end
+				end
+			end
+			Notify("战争大亨", "已删除 " .. cnt .. " 个门", nil, 3)
+		end,
+	})
+
+	WarTab:Button({
+		Title = "防换弹药",
+		Callback = function()
+			pcall(function()
+				local bfs = game:GetService("ReplicatedStorage"):FindFirstChild("BulletFireSystem")
+				if bfs then
+					local gr = bfs:FindFirstChild("GunReload")
+					if gr then gr:Destroy() end
+					local part = Instance.new("Part")
+					part.Name = "GunReload"
+					part.Anchored = true
+					part.Parent = bfs
+				end
+			end)
+			Notify("战争大亨", "防换弹药已启用", nil, 3)
+		end,
+	})
+
+	WarTab:Button({
+		Title = "删除视觉护甲/头盔",
+		Callback = function()
+			local chr = warLP().Character
+			if not chr then return end
+			for _, obj in pairs(chr:GetChildren()) do
+				if obj:IsA("Accessory") then
+					pcall(function() obj:Destroy() end)
+				elseif obj.Name:find("Armor") and obj:FindFirstChild("Mesh") then
+					pcall(function() obj.Mesh:Destroy() end)
+				elseif obj.Name:find("Helmet") then
+					pcall(function() obj:Destroy() end)
+				end
+			end
+			Notify("战争大亨", "已删除视觉护甲/头盔", nil, 3)
+		end,
+	})
+
+	WarTab:Button({
+		Title = "无限跳",
+		Callback = function()
+			game:GetService("UserInputService").JumpRequest:Connect(function()
+				local hum = warLP().Character and warLP().Character:FindFirstChildOfClass("Humanoid")
+				if hum then pcall(function() hum:ChangeState("Jumping") end) end
+			end)
+			Notify("战争大亨", "无限跳已启用", nil, 3)
+		end,
+	})
+
+	--========== 透视ESP ==========
+	WarTab:Section({ Title = "透视" })
+	local _warEspCache = {}
+	local _warEspConn = nil
+	local function warEspCreate(player)
+		local esp = {}
+		esp.box = Drawing.new("Square")
+		esp.box.Color = Color3.new(1, 0, 0)
+		esp.box.Thickness = 1
+		esp.box.Filled = false
+		esp.name = Drawing.new("Text")
+		esp.name.Color = Color3.new(1, 1, 1)
+		esp.name.Outline = true
+		esp.name.Center = true
+		esp.name.Size = 13
+		_warEspCache[player] = esp
+	end
+	local function warEspRemove(player)
+		local esp = _warEspCache[player]
+		if esp then
+			for _, d in pairs(esp) do pcall(function() d:Remove() end) end
+			_warEspCache[player] = nil
+		end
+	end
+	WarTab:Toggle({
+		Title = "玩家透视(方框+名字)",
+		Value = false,
+		Callback = function(v)
+			if v then
+				if not _warEspConn then
+					local camera = workspace.CurrentCamera
+					local lp = warLP()
+					_warEspConn = game:GetService("RunService").RenderStepped:Connect(function()
+						for player, esp in pairs(_warEspCache) do
+							local chr = player.Character
+							if chr and player ~= lp then
+								local hrp = chr:FindFirstChild("HumanoidRootPart")
+								if hrp then
+									local screen, onScreen = camera:WorldToViewportPoint(hrp.Position)
+									if onScreen then
+										esp.box.Visible = true
+										esp.box.Size = Vector2.new(2000, 2000) / screen.Z
+										esp.box.Position = Vector2.new(screen.X, screen.Y)
+										esp.name.Visible = true
+										esp.name.Text = player.Name
+										esp.name.Position = Vector2.new(screen.X, screen.Y - esp.box.Size.Y / 2 - 16)
+									else
+										esp.box.Visible = false
+										esp.name.Visible = false
+									end
+								end
+							else
+								esp.box.Visible = false
+								esp.name.Visible = false
+							end
+						end
+					end)
+				end
+				for _, plr in ipairs(game.Players:GetPlayers()) do
+					if plr ~= warLP() and not _warEspCache[plr] then warEspCreate(plr) end
+				end
+				game.Players.PlayerAdded:Connect(function(plr) warEspCreate(plr) end)
+				game.Players.PlayerRemoving:Connect(function(plr) warEspRemove(plr) end)
+			else
+				if _warEspConn then _warEspConn:Disconnect(); _warEspConn = nil end
+				for _, plr in pairs(_warEspCache) do warEspRemove(plr) end
+				_warEspCache = {}
+			end
+		end,
+	})
+
+	--========== 传送 ==========
+	WarTab:Section({ Title = "传送" })
+	WarTab:Button({ Title = "传送台空投", Callback = function()
+		local gs = workspace:FindFirstChild("Game Systems")
+		if not gs then Notify("战争大亨", "未找到 Game Systems", nil, 3) return end
+		local lp = warLP()
+		for _, obj in ipairs(gs:GetDescendants()) do
+			if obj:IsA("Model") and obj:FindFirstChild("MainPart") and obj.Name:match("Airdrop_") then
+				local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+				if hrp then hrp.CFrame = obj.MainPart.CFrame end
+				return
+			end
+		end
+		Notify("战争大亨", "未找到空投", nil, 3)
+	end })
+	WarTab:Button({ Title = "传送自己基地", Callback = function()
+		local lp = warLP()
+		local team = lp.leaderstats and lp.leaderstats:FindFirstChild("Team") and lp.leaderstats.Team.Value
+		local tycoons = workspace:FindFirstChild("Tycoon") and workspace.Tycoon:FindFirstChild("Tycoons")
+		local tycoon = team and tycoons and tycoons:FindFirstChild(team)
+		local spawnPos = tycoon and tycoon:FindFirstChild("Essentials") and tycoon.Essentials:FindFirstChild("Spawn")
+		if spawnPos then
+			lp.Character:MoveTo(spawnPos.Position)
+		else
+			Notify("战争大亨", "未找到基地出生点", nil, 3)
+		end
+	end })
+	WarTab:Button({ Title = "配饰店基地", Callback = function() warTP(2853, 48, -1282) end })
+	WarTab:Button({ Title = "传送日希", Callback = function() warTP(73.22, 48, 191.07) end })
+	WarTab:Button({ Title = "沉船1", Callback = function() warTP(-9.75, 48.66, 700.22) end })
+	WarTab:Button({ Title = "沉船2", Callback = function() warTP(76.48, 105.26, -2062.39) end })
+	WarTab:Button({ Title = "沉船3", Callback = function() warTP(-28.84, 49.34, -416.99) end })
+	WarTab:Button({ Title = "沉船4", Callback = function() warTP(69.48, 105.26, 3434.90) end })
+
+	--========== 基地传送 ==========
+	WarTab:Section({ Title = "基地传送" })
+	local warBases = {
+		{ "Alpha", -2761, 48, 507 },
+		{ "Bravo", -2770, 48, -578 },
+		{ "Charlie", -2441, 48, -1370 },
+		{ "Delta", -1824, 48, -2098 },
+		{ "Echo", -835, 48, -2233 },
+		{ "Foxtrot", 1051, 48, -2138 },
+		{ "Golf", 1962, 48, -1604 },
+		{ "Hotel", 2853, 48, -1282 },
+		{ "Kilo", 3022, 48, -414 },
+		{ "Lima", 3034, 48, 667 },
+		{ "Omega", 2914, 48, 1568 },
+		{ "Romeo", 2301, 48, 2383 },
+		{ "Sierra", 1347, 48, 2712 },
+		{ "Tango", -916, 48, 2539 },
+		{ "Victor", -2383, 48, 2506 },
+		{ "Zulu", -2362, 48, 1540 },
+	}
+	for _, b in ipairs(warBases) do
+		WarTab:Button({
+			Title = "基地 " .. b[1],
+			Callback = function()
+				warTP(b[2], b[3], b[4])
+			end,
+		})
+	end
+end

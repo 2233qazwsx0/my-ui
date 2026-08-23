@@ -1,42 +1,112 @@
 --------脚本免费开源
 repeat task.wait() until game:IsLoaded()
 
---==== WindUI 库健壮加载：等待 + 重试 + 可见进度，避免 HttpGet 慢/超时导致整个脚本无声中断 ====
-local WindUI = nil
+--==== WindUI 库健壮加载：实时日志 + 等待 + 重试，避免 HttpGet 慢/超时导致整个脚本无声中断 ====
 local WINDUI_URL = "https://raw.githubusercontent.com/2233qazwsx0/my-ui/main/WindUI.lua"
-local MAX_ATTEMPT = 5 -- 最多尝试次数（每次间隔随次数增大）
-local function NotifyUI(title, txt)
+local MAX_ATTEMPT = 5
+
+-- 游戏内实时日志面板：加载全过程输出到屏幕角落 + 控制台
+local _loadLog = { panel = nil, label = nil, lines = {} }
+do
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "RO_LoadLog"
+	sg.ResetOnSpawn = false
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	sg.Parent = game.CoreGui
+
+	local bg = Instance.new("Frame", sg)
+	bg.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+	bg.BackgroundTransparency = 0.15
+	bg.BorderSizePixel = 0
+	bg.Position = UDim2.new(0, 8, 0, 30)
+	bg.Size = UDim2.new(0, 360, 0, 128)
+
+	local title = Instance.new("TextLabel", bg)
+	title.BackgroundTransparency = 1
+	title.Size = UDim2.new(1, 0, 0, 18)
+	title.Font = Enum.Font.GothamBold
+	title.Text = "RO脚本 加载日志"
+	title.TextColor3 = Color3.fromRGB(255, 255, 255)
+	title.TextSize = 13
+	title.TextXAlignment = Enum.TextXAlignment.Left
+
+	local lb = Instance.new("TextLabel", bg)
+	lb.Position = UDim2.new(0, 0, 0, 18)
+	lb.Size = UDim2.new(1, 0, 1, -18)
+	lb.BackgroundTransparency = 1
+	lb.Font = Enum.Font.Code
+	lb.Text = "等待游戏加载...\n"
+	lb.TextColor3 = Color3.fromRGB(140, 255, 140)
+	lb.TextSize = 11
+	lb.TextXAlignment = Enum.TextXAlignment.Left
+	lb.TextYAlignment = Enum.TextYAlignment.Top
+	lb.TextWrapped = true
+
+	_loadLog.panel = sg
+	_loadLog.label = lb
+end
+
+-- 输出一行日志：控制台 print + 游戏内面板（最多保留12行）
+local function _log(msg)
+	local line = "[" .. os.date("%H:%M:%S") .. "] " .. tostring(msg)
+	print("[RO] " .. tostring(msg))
+	_loadLog.lines[#_loadLog.lines + 1] = line
+	while #_loadLog.lines > 12 do table.remove(_loadLog.lines, 1) end
+	_loadLog.label.Text = table.concat(_loadLog.lines, "\n")
+end
+
+local function hideLoadLog()
+	pcall(function()
+		task.wait(2.5)
+		if _loadLog.panel then _loadLog.panel.Enabled = false end
+	end)
+end
+
+local function NotifyUI(txt)
 	pcall(function()
 		game:GetService("StarterGui"):SetCore("SendNotification", {
-			Title = title, Text = txt, Duration = 4,
+			Title = "RO脚本", Text = txt, Duration = 4,
 		})
 	end)
 end
 
+_log("开始加载 WindUI（最多 " .. MAX_ATTEMPT .. " 次机会）")
+local WindUI = nil
+
 for attempt = 1, MAX_ATTEMPT do
+	_log("第 " .. attempt .. " 次拉取 WindUI.lua ...")
 	local ok, src = pcall(function() return game:HttpGet(WINDUI_URL, true) end)
 	if ok and type(src) == "string" and #src > 1000 then
+		_log("拉取成功（" .. #src .. " 字节），开始解析...")
 		local ok2, lib = pcall(function() return loadstring(src)() end)
 		if ok2 and type(lib) == "table" and lib.CreateWindow then
 			WindUI = lib
+			_log("WindUI 解析并创建窗口成功！")
 			break -- 加载成功
 		else
+			_log("解析失败：" .. tostring(lib))
 			warn("[RO] WindUI loadstring 解析失败 (attempt " .. attempt .. ")");
 		end
 	else
-		warn("[RO] WindUI HttpGet 拉取失败 (attempt " .. attempt .. "): " .. tostring(ok))
+		_log("拉取失败（" .. tostring(ok) .. "），长度=" .. (type(src) == "string" and #src or "无"))
 	end
 	if attempt < MAX_ATTEMPT then
-		NotifyUI("RO脚本", "WindUI 拉取中..." .. attempt .. "/" .. MAX_ATTEMPT)
-		task.wait(attempt * 2) -- 退避等待后重试
+		NotifyUI("WindUI 拉取中 ... " .. attempt .. "/" .. MAX_ATTEMPT)
+		local waitSec = attempt * 2
+		_log(waitSec .. " 秒后重试...")
+		task.wait(waitSec) -- 退避等待后重试
 	end
 end
 
 if not WindUI or not WindUI.CreateWindow then
-	NotifyUI("RO脚本", "WindUI 加载失败，请检查网络后重试")
+	_log("全部尝试失败，WindUI 未能加载")
+	NotifyUI("WindUI 加载失败，请检查网络后重新注入")
+	hideLoadLog()
 	error("WindUI 加载失败", 2)
 end
+
 getgenv().WindUI = WindUI
+hideLoadLog()
 
 --==================== 欢迎通知 ====================
 game:GetService("StarterGui"):SetCore("SendNotification", {

@@ -1304,55 +1304,57 @@ local function _updateEsp()
 		if not cam or not LocalPlayer.Character then return end
 		local vp = cam.ViewportSize
 		for _, plr in ipairs(game.Players:GetPlayers()) do
-			if plr == LocalPlayer then goto cont end
-			local char = plr.Character
-			if not char then goto cont end
-			local hum = char:FindFirstChildWhichIsA("Humanoid")
-			local hrp = char:FindFirstChild("HumanoidRootPart")
-			local head = char:FindFirstChild("Head")
-			if not hrp or not head then goto cont end
-			-- 数据按玩家缓存
-			local key = plr.UserId
-			local box = _espBoxes[key]
-			if not box then
-				box = { quad = newQuad(), line = Drawing.new("Line"), label = Drawing.new("Text") }
-				box.line.Thickness = 2
-				box.line.Transparency = 1
-				box.label.Size = 13
-				box.label.Center = true
-				box.label.Transparency = 1
-				_espBoxes[key] = box
+			if plr ~= LocalPlayer then
+				local char = plr.Character
+				if char then
+					local hum = char:FindFirstChildWhichIsA("Humanoid")
+					local hrp = char:FindFirstChild("HumanoidRootPart")
+					local head = char:FindFirstChild("Head")
+					if hrp and head then
+						-- 数据按玩家缓存
+						local key = plr.UserId
+						local box = _espBoxes[key]
+						if not box then
+							box = { quad = newQuad(), line = Drawing.new("Line"), label = Drawing.new("Text") }
+							box.line.Thickness = 2
+							box.line.Transparency = 1
+							box.label.Size = 13
+							box.label.Center = true
+							box.label.Transparency = 1
+							_espBoxes[key] = box
+						end
+						local headPos, scr = cam:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
+						local footPos = cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+						if headPos.Z > 0 and footPos.Z > 0 then
+							local h = (footPos.Y - headPos.Y)
+							local w = h * 0.45
+							local x = headPos.X - w / 2
+							local y = headPos.Y
+							box.quad.Visible = true
+							box.quad.PointA = Vector2.new(x, y)
+							box.quad.PointB = Vector2.new(x + w, y)
+							box.quad.PointC = Vector2.new(x + w, y + h)
+							box.quad.PointD = Vector2.new(x, y + h)
+							box.quad.Color = Color3.fromRGB(0, 255, 60)
+							-- 血条
+							local hp = (hum and hum.MaxHealth > 0) and (hum.Health / hum.MaxHealth) or 1
+							box.line.Visible = true
+							box.line.From = Vector2.new(x - 6, y + h)
+							box.line.To = Vector2.new(x - 6, y + h - h * math.clamp(hp, 0, 1))
+							box.line.Color = hp > 0.5 and Color3.fromRGB(0, 255, 0) or (hp > 0.25 and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(255, 40, 40))
+							-- 名字
+							box.label.Visible = true
+							box.label.Text = plr.Name .. " [" .. math.floor((hum and hum.Health or 0) + 0.5) .. "]"
+							box.label.Position = Vector2.new(headPos.X, y - 16)
+							box.label.Color = Color3.fromRGB(255, 255, 255)
+						else
+							box.quad.Visible = false
+							box.line.Visible = false
+							box.label.Visible = false
+						end
+					end
+				end
 			end
-			local headPos, scr = cam:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
-			local footPos = cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-			if headPos.Z > 0 and footPos.Z > 0 then
-				local h = (footPos.Y - headPos.Y)
-				local w = h * 0.45
-				local x = headPos.X - w / 2
-				local y = headPos.Y
-				box.quad.Visible = true
-				box.quad.PointA = Vector2.new(x, y)
-				box.quad.PointB = Vector2.new(x + w, y)
-				box.quad.PointC = Vector2.new(x + w, y + h)
-				box.quad.PointD = Vector2.new(x, y + h)
-				box.quad.Color = Color3.fromRGB(0, 255, 60)
-				-- 血条
-				local hp = (hum and hum.MaxHealth > 0) and (hum.Health / hum.MaxHealth) or 1
-				box.line.Visible = true
-				box.line.From = Vector2.new(x - 6, y + h)
-				box.line.To = Vector2.new(x - 6, y + h - h * math.clamp(hp, 0, 1))
-				box.line.Color = hp > 0.5 and Color3.fromRGB(0, 255, 0) or (hp > 0.25 and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(255, 40, 40))
-				-- 名字
-				box.label.Visible = true
-				box.label.Text = plr.Name .. " [" .. math.floor((hum and hum.Health or 0) + 0.5) .. "]"
-				box.label.Position = Vector2.new(headPos.X, y - 16)
-				box.label.Color = Color3.fromRGB(255, 255, 255)
-			else
-				box.quad.Visible = false
-				box.line.Visible = false
-				box.label.Visible = false
-			end
-			::cont::
 		end
 	end)
 end

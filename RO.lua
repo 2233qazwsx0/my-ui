@@ -1,7 +1,41 @@
 --------脚本免费开源
 repeat task.wait() until game:IsLoaded()
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/2233qazwsx0/my-ui/main/WindUI.lua", true))()
-assert(type(WindUI) == "table" and WindUI.CreateWindow, "WindUI 加载失败")
+
+--==== WindUI 库健壮加载：等待 + 重试 + 可见进度，避免 HttpGet 慢/超时导致整个脚本无声中断 ====
+local WindUI = nil
+local WINDUI_URL = "https://raw.githubusercontent.com/2233qazwsx0/my-ui/main/WindUI.lua"
+local MAX_ATTEMPT = 5 -- 最多尝试次数（每次间隔随次数增大）
+local function NotifyUI(title, txt)
+	pcall(function()
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = title, Text = txt, Duration = 4,
+		})
+	end)
+end
+
+for attempt = 1, MAX_ATTEMPT do
+	local ok, src = pcall(function() return game:HttpGet(WINDUI_URL, true) end)
+	if ok and type(src) == "string" and #src > 1000 then
+		local ok2, lib = pcall(function() return loadstring(src)() end)
+		if ok2 and type(lib) == "table" and lib.CreateWindow then
+			WindUI = lib
+			break -- 加载成功
+		else
+			warn("[RO] WindUI loadstring 解析失败 (attempt " .. attempt .. ")");
+		end
+	else
+		warn("[RO] WindUI HttpGet 拉取失败 (attempt " .. attempt .. "): " .. tostring(ok))
+	end
+	if attempt < MAX_ATTEMPT then
+		NotifyUI("RO脚本", "WindUI 拉取中..." .. attempt .. "/" .. MAX_ATTEMPT)
+		task.wait(attempt * 2) -- 退避等待后重试
+	end
+end
+
+if not WindUI or not WindUI.CreateWindow then
+	NotifyUI("RO脚本", "WindUI 加载失败，请检查网络后重试")
+	error("WindUI 加载失败", 2)
+end
 getgenv().WindUI = WindUI
 
 --==================== 欢迎通知 ====================

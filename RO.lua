@@ -1637,7 +1637,7 @@ GeneralTab:Toggle({
 })
 
 --==================== ro飞行 / ro飞车（手搓·触屏飞行面板，作者: CUA） ====================
--- 纯 ScreenGui 实现：移动端可触屏，浮动按钮控制上下/水平冲刺，不依赖 WindUI 弹窗
+-- 纯 ScreenGui 实现：移动端可触屏，浮动按钮控制升降，前后左右跟随原生触屏摇杆（MoveDirection）
 do
 	local Players = game:GetService("Players")
 	local RunService = game:GetService("RunService")
@@ -1645,16 +1645,41 @@ do
 	local lp = Players.LocalPlayer
 
 	local flyGui = nil       -- 触屏飞行面板
-	local flying = false
+	local flying = false     -- 飞行总开关（悬浮态）
 	local ascendDir = 0      -- -1 下 / 0 停 / 1 上
 	local conn = nil
-	local MOVE_SPEED = 60    -- 水平速度
-	local ASCEND_SPEED = 45  -- 升降速度
+	local flySpeed = 120     -- 水平飞行速度（可调 10~500，默认 120）
+	local ascendSpeed = 60   -- 升降速度（默认 60）
 
-	-- 关闭飞行并销毁面板
+	-- 记录被我们禁用/恢复的角色状态，悬浮关闭时恢复原生物理
+	local humRestore = nil   -- { Humanoid = h }
+
+	local function setNativeFlying(hum)
+		if not hum then return end
+		hum:SetStateEnabled(Enum.HumanoidStateType.Flying, false)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+		hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+		hum.PlatformStand = true
+	end
+
+	-- 关闭飞行并恢复原生物理
 	local function stopFly()
 		flying = false
 		ascendDir = 0
+		if humRestore and humRestore.Humanoid then
+			local h = humRestore.Humanoid
+			pcall(function()
+				h:SetStateEnabled(Enum.HumanoidStateType.Flying, true)
+				h:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+				h:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+				h:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+				h:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+				h.PlatformStand = false
+			end)
+		end
+		humRestore = nil
 		if conn then conn:Disconnect() conn = nil end
 	end
 
@@ -1671,8 +1696,8 @@ do
 		flyGui.Parent = lp:WaitForChild("PlayerGui")
 
 		local panel = Instance.new("Frame")
-		panel.Size = UDim2.new(0, 180, 0, 230)
-		panel.Position = UDim2.new(0.9, -190, 0.5, -115)
+		panel.Size = UDim2.new(0, 180, 0, 300)
+		panel.Position = UDim2.new(0.9, -190, 0.5, -150)
 		panel.BackgroundColor3 = Color3.fromRGB(22,22,30)
 		panel.BackgroundTransparency = 0.15
 		panel.BorderSizePixel = 0
@@ -1692,28 +1717,100 @@ do
 		end
 
 		-- 上升/下降按钮
-		local upBtn = mk("▲", UDim2.new(0.5,-22,0,4), UDim2.new(0,44,0,40), Color3.fromRGB(50,160,90))
-		local downBtn = mk("▼", UDim2.new(0.5,-22,0,48), UDim2.new(0,44,0,40), Color3.fromRGB(190,70,70))
+		local upBtn = mkBtn("▲", UDim2.new(0.5,-22,0,4), UDim2.new(0,44,0,40), Color3.fromRGB(50,160,90))
+		local downBtn = mkBtn("▼", UDim2.new(0.5,-22,0,48), UDim2.new(0,44,0,40), Color3.fromRGB(190,70,70))
 		upBtn.MouseButton1Down:Connect(function() ascendDir = 1 end)
 		upBtn.MouseButton1Up:Connect(function() ascendDir = 0 end)
 		downBtn.MouseButton1Down:Connect(function() ascendDir = -1 end)
 		downBtn.MouseButton1Up:Connect(function() ascendDir = 0 end)
 
 		-- 悬浮总开关
-		local flyToggle = mk("悬浮ON", UDim2.new(0.5,-65,0,92), UDim2.new(0,130,0,34), Color3.fromRGB(70,120,220))
+		local flyToggle = mkBtn("悬浮ON", UDim2.new(0.5,-65,0,92), UDim2.new(0,130,0,34), Color3.fromRGB(70,120,220))
 		local toggleOn = false
 		flyToggle.MouseButton1Click:Connect(function()
 			toggleOn = not toggleOn
 			flyToggle.Text = toggleOn and "悬浮ON" or "悬浮OFF"
 			flyToggle.BackgroundColor3 = toggleOn and Color3.fromRGB(50,170,90) or Color3.fromRGB(70,120,220)
+			if toggleOn then
+				-- 开启：进入悬浮态
+				flying = true
+				local char = lp and lp.Character
+				local hum = char and (char:FindFirstChildOfClass("Humanoid"))
+				if hum then
+					humRestore = { Humanoid = hum }
+					setNativeFlying(hum)
+				end
+			else
+				-- 关闭悬浮：彻底停飞、恢复正常物理
+				stopFly()
+			end
+		end)
+
+		-- 飞行速度滑条（触屏可拖，10~500）
+		local speedLabel = Instance.new("TextLabel")
+		speedLabel.Text = "飞行速度 " .. flySpeed
+		speedLabel.TextSize = 12; speedLabel.TextColor3 = Color3.new(0.85,0.85,0.85)
+		speedLabel.BackgroundTransparency = 1
+		speedLabel.Position = UDim2.new(0,10,0,132); speedLabel.Size = UDim2.new(0,160,0,18)
+		speedLabel.Parent = panel
+
+		local speedBar = Instance.new("Frame")
+		speedBar.Position = UDim2.new(0,18,0,152); speedBar.Size = UDim2.new(0,144,0,16)
+		speedBar.BackgroundColor3 = Color3.fromRGB(40,40,50); speedBar.BorderSizePixel = 0
+		local suc = Instance.new("UICorner"); suc.CornerRadius = UDim.new(0.5,0); suc.Parent = speedBar
+		speedBar.Parent = panel
+
+		local speedFill = Instance.new("Frame")
+		speedFill.BackgroundColor3 = Color3.fromRGB(70,200,120); speedFill.BorderSizePixel = 0
+		speedFill.Parent = speedBar
+
+		local speedThumb = Instance.new("TextButton")
+		speedThumb.Text = ""; speedThumb.BackgroundColor3 = Color3.new(1,1,1)
+		speedThumb.BorderSizePixel = 0; speedThumb.AutoButtonColor = false
+		speedThumb.Size = UDim2.new(0,20,0,20)
+		speedThumb.Parent = speedBar
+		local thuc = Instance.new("UICorner"); thuc.CornerRadius = UDim.new(0.5,0); thuc.Parent = speedThumb
+
+		local dragSpeed = false
+		local function updateSpeedFromX(x)
+			local barAbs = speedBar.AbsolutePosition
+			local barSize = speedBar.AbsoluteSize.X
+			local frac = math.clamp((x - barAbs.X) / barSize, 0, 1)
+			flySpeed = math.floor(10 + frac * (500 - 10))
+			local fillW = math.clamp((flySpeed - 10) / (500 - 10), 0, 1) * 144
+			speedFill.Size = UDim2.new(0, fillW, 1, 0)
+			speedThumb.Position = UDim2.new(0, math.clamp(fillW - 10, 0, 144 - 20), -0.15, 0)
+			speedLabel.Text = "飞行速度 " .. flySpeed
+		end
+		speedThumb.InputBegan:Connect(function()
+			dragSpeed = true
+		end)
+		speedThumb.InputEnded:Connect(function()
+			dragSpeed = false
+		end)
+		speedBar.InputBegan:Connect(function(inp)
+			if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+				dragSpeed = true
+				updateSpeedFromX(inp.Position.X)
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(inp)
+			if dragSpeed and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+				updateSpeedFromX(inp.Position.X)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(inp)
+			if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+				dragSpeed = false
+			end
 		end)
 
 		-- 说明
 		local info = Instance.new("TextLabel")
-		info.Text = "▲▼升降 | WASD移动"
+		info.Text = "▲▼升降 | 摇杆平移"
 		info.TextSize = 12; info.TextColor3 = Color3.new(0.85,0.85,0.85)
 		info.BackgroundTransparency = 1
-		info.Position = UDim2.new(0,10,0,200); info.Size = UDim2.new(0,160,0,20)
+		info.Position = UDim2.new(0,10,0,174); info.Size = UDim2.new(0,160,0,20)
 		info.Parent = panel
 
 		-- 关闭
@@ -1727,21 +1824,28 @@ do
 			if flyGui then flyGui:Destroy() flyGui = nil end
 		end)
 
-		-- 飞行循环
+		-- 飞行循环（RenderStepped）
 		if not conn then
 			conn = RunService.RenderStepped:Connect(function(dt)
 				if not toggleOn then return end
 				local char = lp and lp.Character
+				local hum = char and (char:FindFirstChildOfClass("Humanoid"))
 				local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart"))
-				if not hrp then return end
-				local cam = workspace.CurrentCamera
-				local mv = Vector3.zero
-				if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + cam.CFrame.LookVector end
-				if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - cam.CFrame.LookVector end
-				if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv = mv + cam.CFrame.RightVector end
-				if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - cam.CFrame.RightVector end
-				if mv.Magnitude > 0 then mv = mv.Unit * MOVE_SPEED * dt end
-				hrp.CFrame = hrp.CFrame + mv + Vector3.new(0, ascendDir * ASCEND_SPEED * dt, 0)
+				if not (hum and hrp) then return end
+
+				-- 维持悬浮态（防止被挤出）
+				hum.PlatformStand = true
+
+				-- 水平移动：跟随原生触屏摇杆的 MoveDirection（前后左右交给原生摇杆）
+				local dir = hum.MoveDirection  -- 原生摇杆给出的世界方向
+				-- 原生摇杆方向（水平分量）+ 自定义竖直升降
+				local move = Vector3.new(dir.X, 0, dir.Z)
+				if move.Magnitude > 0 then
+					move = move.Unit * flySpeed * dt
+				end
+				local lift = Vector3.new(0, ascendDir * ascendSpeed * dt, 0)
+				hrp.CFrame = hrp.CFrame + move + lift
+				-- 保持角色朝向由原生摇杆/相机处理，不做额外 CFrame 接管
 			end)
 		end
 	end

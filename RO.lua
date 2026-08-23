@@ -523,6 +523,111 @@ local Window = WindUI:CreateWindow({
 Window:SetIconSize(48)
 Window:Tag({ Title = "v1.0", Color = Color3.fromHex("#30ff6a") })
 local RO_TAG = Window:Tag({ Title = "CUA制作", Color = Color3.fromHex("#315dff") })
+--==================== 美化层（彩色Wind风格·仅视觉，不影响功能） ====================
+do
+	local RunSvc = game:GetService("RunService")
+	local ColorHSVA = Color3.fromHSV
+
+	-- 收集所有连接与创建的 Gradient / Stroke，窗口销毁时统一清理
+	local connections = {}
+	local function scheduleCleanup(destroyed, grads)
+		task.spawn(function()
+			while not destroyed.Mark do
+				if not Window.UIElements or not Window.UIElements.Main or not Window.UIElements.Main:IsDescendantOf(game) then
+					destroyed.Mark = true
+				end
+				task.wait()
+			end
+			for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+			for _, g in ipairs(grads) do pcall(function() g:Destroy() end) end
+			connections = {}
+			grads = {}
+		end)
+	end
+	local destroyed = { Mark = false }
+	local createdObjs = {}
+
+	local function makeRainbowStroke(target, keys)
+		if not (target and target.Parent) then return end
+		local ok = pcall(function()
+			local s = Instance.new("UIStroke")
+			s.Thickness = keys.Thickness or 2
+			s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			s.Color = Color3.new(1, 1, 1)
+			s.LineJoinMode = keys.LineJoinMode or Enum.LineJoinMode.Round
+			local grad = Instance.new("UIGradient")
+			grad.Color = ColorSequence.new(ColorHSVA(0, 0.9, 1), ColorHSVA(0.5, 0.9, 1))
+			grad.Parent = s
+			s.Parent = target
+			local t = 0
+			connections[#connections + 1] = RunSvc.Heartbeat:Connect(function(dt)
+				t = t + dt * (keys.Speed or 0.5)
+				grad.Rotation = (keys.Rot or 360) * math.sin(t * 0.2)
+				grad.Color = ColorSequence.new(ColorHSVA(t % 1, 0.9, 1), ColorHSVA((t + 0.5) % 1, 0.9, 1))
+			end)
+			createdObjs[#createdObjs + 1] = s
+		end)
+		return ok
+	end
+
+	local function makeRainbowText(label, speed)
+		if not (label and label.Parent) then return end
+		pcall(function()
+			local grad = Instance.new("UIGradient")
+			grad.Color = ColorSequence.new(ColorHSVA(0, 0.9, 1), ColorHSVA(0.3, 0.9, 1))
+			grad.Parent = label
+			local t = 0
+			connections[#connections + 1] = RunSvc.Heartbeat:Connect(function(dt)
+				t = t + dt * (speed or 0.8)
+				grad.Rotation = 60 * math.sin(t * 0.5)
+				grad.Color = ColorSequence.new(ColorHSVA(t % 1, 0.9, 1), ColorHSVA((t + 0.3) % 1, 0.9, 1))
+			end)
+			createdObjs[#createdObjs + 1] = grad
+		end)
+	end
+
+	-- 1) 主窗口边框彩虹
+	local mainContainer = Window.UIElements and Window.UIElements.MainContainer
+	if mainContainer then makeRainbowStroke(mainContainer, { Thickness = 2.5, Speed = 0.5 }) end
+
+	-- 2) 标题文字彩虹（优先找文本为 "RO脚本" 的标题标签）
+	local foundTitle = false
+	local panel = Window.UIElements and Window.UIElements.Main
+	if panel then
+		for _, obj in ipairs(panel:GetDescendants()) do
+			if obj:IsA("TextLabel") and obj.Text and string.find(obj.Text, "RO脚本", 1, true) then
+				makeRainbowText(obj, 0.8)
+				foundTitle = true
+				break
+			end
+		end
+	end
+	if not foundTitle and Window.UIElements and Window.UIElements.Title then
+		makeRainbowText(Window.UIElements.Title, 0.8)
+	end
+
+	-- 3) 悬浮开关按钮彩虹描边
+	pcall(function()
+		local ob = Window.OpenButtonMain
+		if ob and ob.Button then
+			local btn = ob.Button:FindFirstChildWhichIsA("TextButton")
+			if btn then makeRainbowStroke(btn, { Thickness = 3, Speed = 0.6, Rot = 150 }) end
+		end
+	end)
+
+	-- 4) 窗口整体淡淡彩虹光晕氛围（保深色主体）
+	if panel then
+		pcall(function()
+			local glow = Instance.new("UIGradient")
+			glow.Color = ColorSequence.new(ColorHSVA(0.7, 0.35, 0.05), ColorHSVA(0.1, 0.45, 0.10))
+			glow.Rotation = 90
+			glow.Parent = panel
+			createdObjs[#createdObjs + 1] = glow
+		end)
+	end
+
+	scheduleCleanup(destroyed, createdObjs)
+end
 
 --==================== 『信息』Tab ====================
 local InfoTab = Window:Tab({ Title = "信息", Icon = "geist:info" })

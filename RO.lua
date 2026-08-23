@@ -3492,3 +3492,71 @@ do
 		})
 	end
 end
+
+--==================== 『河北唐县』Tab ====================
+-- 整合自 皮脚本-河北唐县，纯本地实现（刷钱 + 传送）
+do
+	local HBTab = Window:Tab({ Title = "河北唐县", Icon = "geist:map" })
+
+	local xLp = game.Players.LocalPlayer
+	local function xTP(x, y, z)
+		local hrp = xLp.Character and xLp.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then hrp.CFrame = CFrame.new(x, y, z) end
+	end
+
+	-- 防止挂机踢出
+	pcall(function() game:GetService("VirtualUser"):CaptureController() end)
+
+	--========== 刷钱功能 ==========
+	HBTab:Section({ Title = "刷钱功能" })
+
+	-- 自动刷钱①：首选成为送货司机 delivery driver
+	local _xFarm = false
+	HBTab:Toggle({
+		Title = "自动刷钱① (送货司机)",
+		Value = false,
+		Callback = function(on)
+			_xFarm = on
+			if on then
+				task.spawn(function()
+					while _xFarm do
+						-- 点击货物堆
+						pcall(function()
+							fireclickdetector(workspace.DeliverySys.Misc["Package Pile"].ClickDetector)
+						end)
+						task.wait(2.2)
+						-- 遍历所有送货点，传送到当前激活的点
+						pcall(function()
+							local children = workspace.DeliverySys.DeliveryPoints:GetChildren()
+							for _, point in pairs(children) do
+								if point.Locate and point.Locate.Locate and point.Locate.Locate.Enabled then
+									local hrp = xLp.Character and xLp.Character:FindFirstChild("HumanoidRootPart")
+									if hrp then hrp.CFrame = point.CFrame end
+								end
+							end
+						end)
+						task.wait()
+					end
+				end)
+			end
+		end,
+	})
+
+	-- 自动刷钱②：万能自动刷钱（需先成为送货司机）
+	HBTab:Button({
+		Title = "自动刷钱② (沙盒云)",
+		Callback = function()
+			pcall(function()
+				loadstring(game:HttpGet("https://scriptblox.com/raw/Update-V3.10-T-ang-County-Hebei-Auo-Farm-15577"))()
+			end)
+		end,
+	})
+
+	--========== 传送功能 ==========
+	HBTab:Section({ Title = "传送功能" })
+	HBTab:Button({ Title = "传送至驾驶局", Callback = function() xTP(-5513.97412109375, 8.656171798706055, 4964.291015625) end })
+	HBTab:Button({ Title = "传送至出生点", Callback = function() xTP(-3338.31982421875, 10.048742294311523, 3741.84033203125) end })
+	HBTab:Button({ Title = "传送至医院", Callback = function() xTP(-5471.482421875, 14.149418830871582, 4259.75341796875) end })
+	HBTab:Button({ Title = "传送至手机店", Callback = function() xTP(-6789.2041015625, 11.197686195373535, 1762.687255859375) end })
+	HBTab:Button({ Title = "传送至烧烤店", Callback = function() xTP(-5912.84765625, 12.217276573181152, 1058.29443359375) end })
+end

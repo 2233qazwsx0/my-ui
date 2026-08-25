@@ -5,7 +5,7 @@ repeat task.wait() until game:IsLoaded()
 -- 一代直链
 local URL_GEN1 = "https://raw.githubusercontent.com/2233qazwsx0/my-ui/main/RO.lua"
 -- 二代直链（占位符，上线后替换）
-local URL_GEN2 = "" -- TODO: 二代 URL 待填
+local URL_GEN2 = "https://raw.githubusercontent.com/2233qazwsx0/my-ui/refs/heads/main/%C3%BD%C3%A3RO-obfuscated.lua" 
 
 local WINDUI_URL = "https://raw.githubusercontent.com/2233qazwsx0/my-ui/main/WindUI.lua"
 
